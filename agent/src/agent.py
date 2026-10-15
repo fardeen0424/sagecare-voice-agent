@@ -1,0 +1,65 @@
+"""Care-navigation voice agent: a LiveKit Agents worker whose STT, LLM and TTS all run on this GPU server.
+
+Run: python -m livekit.agents start agent.py   (LIVEKIT_URL / LIVEKIT_API_KEY / LIVEKIT_API_SECRET from env)
+Every finished turn appends one JSON line to $TURN_LOG with the framework's latency metrics.
+"""
+
+import json
+import os
+import time
+
+from livekit.agents import Agent, AgentServer, AgentSession, JobContext, JobProcess, tts
+from livekit.plugins import openai, silero
+from livekit.plugins.turn_detector.english import EnglishModel
+
+from clauses import ClauseTokenizer
+from fish_tts import FishTTS
+from nemotron_stt import NemotronSTT
+
+TURN_LOG = os.environ.get("TURN_LOG", "/logs/turns.jsonl")
+INSTRUCTIONS = (
+    "You are Sage, a friendly care-navigation assistant for a clinic, speaking with a patient on a call. "
+    "You help them book appointments. Reply in one or two short spoken sentences: plain words, no lists, "
+    "no markdown, no emojis."
+)
+
+
+def setup(proc: JobProcess) -> None:
+    proc.userdata["vad"] = silero.VAD.load()  # loaded once per worker process, not per call
+
+
+server = AgentServer(setup_fnc=setup)
+
+
+@server.rtc_session()
+async def entrypoint(ctx: JobContext) -> None:
+    stt = NemotronSTT()
+    session = AgentSession(
+        vad=ctx.proc.userdata["vad"],
+        stt=stt,
+        llm=openai.LLM(base_url="http://127.0.0.1:8000/v1", api_key="local", model="qwen3.8-27b"),
+        tts=tts.StreamAdapter(tts=FishTTS(), sentence_tokenizer=ClauseTokenizer()),
+        turn_handling={
+            "turn_detection": EnglishModel(),  # semantic end-of-turn model, local ONNX on CPU
+            "interruption": {"mode": "vad"},  # barge-in on voice activity; "adaptive" calls LiveKit Cloud
+            "preemptive_generation": {"enabled": True, "preemptive_tts": True},
+        },
+    )
+
+    @session.on("user_state_changed")
+    def _finalize_stt(ev) -> None:
+        if ev.old_state == "speaking":
+            stt.end_utterance()
+
+    @session.on("conversation_item_added")
+    def _log_turn(ev) -> None:
+        item = ev.item
+        if getattr(item, "role", None) not in ("user", "assistant"):
+            return
+        record = {"ts": time.time(), "room": ctx.room.name, "role": item.role,
+                  "text": item.text_content, "metrics": dict(item.metrics)}
+        with open(TURN_LOG, "a") as f:
+            f.write(json.dumps(record, default=str) + "\n")
+
+    await session.start(room=ctx.room, agent=Agent(instructions=INSTRUCTIONS))
+    await session.generate_reply(instructions="Greet the caller as Sage and ask how you can help.")

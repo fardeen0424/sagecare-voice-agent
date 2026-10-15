@@ -1,4 +1,4 @@
-# One GPU cell: three model services, LiveKit (WebRTC) and Caddy (TLS). Model ports bind to 127.0.0.1
+# One GPU cell: three model services, LiveKit (WebRTC), Caddy (TLS) and the voice agent. Model ports bind to 127.0.0.1
 # because Docker's own iptables rules would make a published port public even with ufw blocking it.
 # LiveKit and Caddy use host networking instead, so ufw (scripts/open_ports.sh) decides what is public.
 
@@ -91,6 +91,23 @@ services:
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data # certificates; Let's Encrypt rate-limits re-issuing them
+
+  agent:
+    build: ../agent # LiveKit Agents worker: one job per call, STT -> LLM -> TTS on this GPU
+    image: voice-agent:local
+    container_name: agent
+    restart: always
+    network_mode: host # reaches LiveKit and the model ports on 127.0.0.1
+    env_file: ../.env
+    environment:
+      LIVEKIT_URL: ws://127.0.0.1:7880 # local signaling; .env holds the public wss:// URL for browsers
+    depends_on:
+      livekit: { condition: service_healthy }
+      tts: { condition: service_healthy }
+    volumes: [/srv/voice/logs:/logs] # turns.jsonl: per-turn latency metrics
+    healthcheck:
+      <<: *health
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081')"]
 
 volumes:
   caddy-data:

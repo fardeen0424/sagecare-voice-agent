@@ -10,3 +10,5 @@ models/*
 .cache/
 .claude/
 scratch/
+
+logs/

@@ -17,7 +17,7 @@ env_default LIVEKIT_DOMAIN "$domain"
 env_default LIVEKIT_URL "wss://$(sed -n 's/^LIVEKIT_DOMAIN=//p' .env)"
 env_default LIVEKIT_API_KEY "API$(openssl rand -hex 6)"
 env_default LIVEKIT_API_SECRET "$(openssl rand -hex 32)"
-mkdir -p .cache/vllm .cache/tts # compile caches; Docker would create them root-owned
+mkdir -p .cache/vllm .cache/tts logs # caches and turn logs; Docker would create them root-owned
 ./scripts/download_models.sh
 
 compose="docker compose -f infra/docker-compose.yml"
@@ -26,4 +26,5 @@ $compose up -d --build --remove-orphans --wait --wait-timeout 1800 \
   || { $compose ps -a; $compose logs --tail 60; echo "A service did not become healthy."; exit 1; }
 
 $compose exec -T stt python - 1 < scripts/check.py
+$compose exec -T agent python caller.py 2 # a simulated call through LiveKit and the agent
 echo "Deploy OK: $(git log --oneline -1)"

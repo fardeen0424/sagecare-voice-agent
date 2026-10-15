@@ -1,6 +1,7 @@
 services:
   llm:
-    image: vllm/vllm-openai:latest      # pin an exact version once it works
+    # vLLM 0.31.0, CUDA 13.0 (host driver >= 580), kernels for sm_90 (H100/H200) and sm_120 (RTX PRO 6000)
+    image: vllm/vllm-openai:v0.31.0@sha256:c1c9f6fd5c109ba7f0546a59f5b2f15fb87f64c77782e90a27b648b42a8e67c3
     container_name: llm
     restart: always
     ipc: host                            # vLLM needs shared memory between its processes

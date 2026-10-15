@@ -62,4 +62,5 @@ async def entrypoint(ctx: JobContext) -> None:
             f.write(json.dumps(record, default=str) + "\n")
 
     await session.start(room=ctx.room, agent=Agent(instructions=INSTRUCTIONS))
-    await session.generate_reply(instructions="Greet the caller as Sage and ask how you can help.")
+    # A fixed greeting: no LLM call, and Qwen's chat template rejects a request with no user message.
+    await session.say("Hi, this is Sage from the clinic. How can I help you today?")

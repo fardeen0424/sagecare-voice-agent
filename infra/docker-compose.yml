@@ -46,3 +46,62 @@ services:
       timeout: 5s
       retries: 5
       start_period: 900s
+
+  tts:
+    # Fish Speech v3.0.0-beta API server (CUDA 12.9) serving S2 Pro; image runs as uid 1000
+    image: fishaudio/fish-speech:server-cuda-v3.0.0-beta@sha256:b9940ac9a9272721e5f29f3903492f28a2fddc78ec8810e819e86f814159edf8
+    container_name: tts
+    restart: always
+    depends_on:
+      llm:
+        condition: service_healthy       # start after vLLM has sized its KV cache from free GPU memory
+    environment:
+      LLAMA_CHECKPOINT_PATH: checkpoints/s2-pro
+      DECODER_CHECKPOINT_PATH: checkpoints/s2-pro/codec.pth
+      COMPILE: "1"                       # torch.compile: slower first start, much faster decoding
+      TORCHINDUCTOR_CACHE_DIR: /cache/inductor
+      TRITON_CACHE_DIR: /cache/triton
+    volumes:
+      - /models/fish-s2-pro:/app/checkpoints/s2-pro:ro
+      - /srv/voice/.cache/fish:/cache    # compile cache survives restarts
+    ports:
+      - "127.0.0.1:8080:8080"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8080/v1/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 900s
+
+  stt:
+    build: ./stt                         # our streaming WebSocket wrapper around Nemotron 3.5 ASR
+    image: voice-stt:local
+    container_name: stt
+    restart: always
+    depends_on:
+      llm:
+        condition: service_healthy
+    volumes:
+      - /models/nemotron-3.5-asr:/models/nemotron-3.5-asr:ro
+    ports:
+      - "127.0.0.1:8001:8001"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 300s

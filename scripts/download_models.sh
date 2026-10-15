@@ -14,7 +14,7 @@ download () {   # $1 = Hugging Face repo, $2 = folder under /models, $3 = option
 
 download Qwen/Qwen3.8-27B-FP8 qwen3.8-27b-fp8 &
 download fishaudio/s2-pro fish-s2-pro &
-# Transformers weights only; skips the .nemo and .gguf copies of the same model
-download nvidia/nemotron-3.5-asr-streaming-0.6b nemotron-3.5-asr "--include '*.json' model.safetensors" &
+# Transformers weights only: skip the .nemo and .gguf copies of the same model
+download nvidia/nemotron-3.5-asr-streaming-0.6b nemotron-3.5-asr "--exclude '*.nemo' --exclude '*.gguf' --exclude '*.png'" &
 wait
 echo "All downloads finished."

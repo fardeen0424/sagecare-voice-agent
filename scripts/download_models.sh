@@ -22,6 +22,7 @@ download () {   # $1 = Hugging Face repo, $2 = pinned revision, $3 = folder unde
 download Qwen/Qwen3.8-27B-FP8 017b9c7af6b5689d5dd426a76e0bc077eb5ca20a qwen3.8-27b-fp8 &
 download fishaudio/s2-pro 1de9996b6be38b745688de084d87a5633f714e4e fish-s2-pro &
 # Transformers weights only: skip the .nemo and .gguf copies of the same model
-download nvidia/nemotron-3.5-asr-streaming-0.6b ea30d66debe3740a08b573244286791d423d6b3e nemotron-3.5-asr   "--exclude '*.nemo' --exclude '*.gguf' --exclude '*.png'" &
+download nvidia/nemotron-3.5-asr-streaming-0.6b ea30d66debe3740a08b573244286791d423d6b3e nemotron-3.5-asr \
+  "--exclude '*.nemo' --exclude '*.gguf' --exclude '*.png'" &
 for job in $(jobs -p); do wait "$job"; done   # a failed download fails the script
 echo "All downloads finished."

@@ -10,11 +10,15 @@ services:
       - --served-model-name
       - qwen3.8-27b
       - --max-model-len
-      - "32768"
+      - "16384"
+      - --max-num-seqs                   # default 1024 > Mamba cache blocks; each sequence needs one
+      - "32"
+      - --limit-mm-per-prompt            # voice is text-only, no image/video budget
+      - '{"image": 0, "video": 0}'
       - --kv-cache-dtype
       - fp8
       - --gpu-memory-utilization
-      - "0.50"
+      - "0.60"
       - --enable-prefix-caching
       - --reasoning-parser
       - qwen3

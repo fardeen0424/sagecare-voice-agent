@@ -1,107 +1,72 @@
+# The three model services of one GPU cell. Ports bind to 127.0.0.1 because Docker's own
+# iptables rules would make a published port public even with ufw blocking it.
+
+x-gpu: &gpu
+  restart: always
+  deploy:
+    resources:
+      reservations:
+        devices: [{ driver: nvidia, count: all, capabilities: [gpu] }]
+
+x-health: &health
+  interval: 15s
+  timeout: 5s
+  retries: 5
+  start_period: 15m
+
 services:
   llm:
+    <<: *gpu
     # vLLM 0.31.0, CUDA 13.0 (host driver >= 580), kernels for sm_90 (H100/H200) and sm_120 (RTX PRO 6000)
     image: vllm/vllm-openai:v0.31.0@sha256:c1c9f6fd5c109ba7f0546a59f5b2f15fb87f64c77782e90a27b648b42a8e67c3
     container_name: llm
-    restart: always
-    ipc: host                            # vLLM needs shared memory between its processes
-    entrypoint: ["vllm", "serve"]
-    command:
-      - /models/qwen3.8-27b-fp8
-      - --served-model-name
-      - qwen3.8-27b
-      - --max-model-len
-      - "16384"
-      - --max-num-seqs                   # default 1024 > Mamba cache blocks; each sequence needs one
-      - "32"
-      - --limit-mm-per-prompt            # voice is text-only, no image/video budget
-      - '{"image": 0, "video": 0}'
-      - --kv-cache-dtype
-      - fp8
-      - --gpu-memory-utilization
-      - "0.60"
-      - --enable-prefix-caching
-      - --reasoning-parser
-      - qwen3
-      - --enable-auto-tool-choice
-      - --tool-call-parser
-      - qwen3_coder
-      - --default-chat-template-kwargs
-      - '{"enable_thinking": false}'
+    ipc: host # vLLM's processes share memory
+    entrypoint: [vllm, serve]
+    # --max-num-seqs 32: the default 1024 exceeds the hybrid model's recurrent-state (Mamba) blocks.
+    # Images/video off (voice is text-only), 16K context, 60% of the GPU, thinking off.
+    command: >-
+      /models/qwen3.8-27b-fp8
+      --served-model-name qwen3.8-27b
+      --max-model-len 16384
+      --max-num-seqs 32
+      --limit-mm-per-prompt '{"image": 0, "video": 0}'
+      --kv-cache-dtype fp8
+      --gpu-memory-utilization 0.60
+      --enable-prefix-caching
+      --reasoning-parser qwen3
+      --enable-auto-tool-choice --tool-call-parser qwen3_coder
+      --default-chat-template-kwargs '{"enable_thinking": false}'
     volumes:
-      - /models:/models:ro
+      - /models/qwen3.8-27b-fp8:/models/qwen3.8-27b-fp8:ro
       - /srv/voice/.cache/vllm:/root/.cache/vllm
-    ports:
-      - "127.0.0.1:8000:8000"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fs http://localhost:8000/health || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 900s
-
-  tts:
-    # Fish Speech v3.0.0-beta API server (CUDA 12.9) serving S2 Pro; image runs as uid 1000
-    image: fishaudio/fish-speech:server-cuda-v3.0.0-beta@sha256:b9940ac9a9272721e5f29f3903492f28a2fddc78ec8810e819e86f814159edf8
-    container_name: tts
-    restart: always
-    depends_on:
-      llm:
-        condition: service_healthy       # start after vLLM has sized its KV cache from free GPU memory
-    environment:
-      LLAMA_CHECKPOINT_PATH: checkpoints/s2-pro
-      DECODER_CHECKPOINT_PATH: checkpoints/s2-pro/codec.pth
-      COMPILE: "1"                       # torch.compile: slower first start, much faster decoding
-      TORCHINDUCTOR_CACHE_DIR: /cache/inductor
-      TRITON_CACHE_DIR: /cache/triton
-    volumes:
-      - /models/fish-s2-pro:/app/checkpoints/s2-pro:ro
-      - /srv/voice/.cache/fish:/cache    # compile cache survives restarts
-    ports:
-      - "127.0.0.1:8080:8080"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fs http://localhost:8080/v1/health || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 900s
+    ports: ["127.0.0.1:8000:8000"]
+    healthcheck: { <<: *health, test: [CMD, curl, -fs, localhost:8000/health] }
 
   stt:
-    build: ./stt                         # our streaming WebSocket wrapper around Nemotron 3.5 ASR
+    <<: *gpu
+    build: ./stt # our streaming WebSocket wrapper around Nemotron 3.5 ASR
     image: voice-stt:local
     container_name: stt
-    restart: always
-    depends_on:
-      llm:
-        condition: service_healthy
-    volumes:
-      - /models/nemotron-3.5-asr:/models/nemotron-3.5-asr:ro
-    ports:
-      - "127.0.0.1:8001:8001"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+    depends_on: { llm: { condition: service_healthy } } # vLLM sizes its KV cache from free GPU memory
+    volumes: [/models/nemotron-3.5-asr:/models/nemotron-3.5-asr:ro]
+    ports: ["127.0.0.1:8001:8001"]
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 300s
+      <<: *health
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+
+  tts:
+    <<: *gpu
+    build: ./tts # SGLang-Omni serving Fish S2 Pro, streams audio while it is generated
+    image: voice-tts:local
+    container_name: tts
+    depends_on: { llm: { condition: service_healthy } }
+    ipc: host
+    command: [sgl-omni, serve, --config, /app/s2pro.yaml, --port, "8002"]
+    environment:
+      TORCHINDUCTOR_CACHE_DIR: /cache/inductor # compile caches survive restarts
+      TRITON_CACHE_DIR: /cache/triton
+    volumes:
+      - /models/fish-s2-pro:/models/fish-s2-pro:ro
+      - /srv/voice/.cache/tts:/cache
+    ports: ["127.0.0.1:8002:8002"]
+    healthcheck: { <<: *health, test: [CMD, curl, -fs, localhost:8002/health] }

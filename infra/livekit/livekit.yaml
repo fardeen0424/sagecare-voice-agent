@@ -1,0 +1,10 @@
+# LiveKit server for one GPU cell. Keys come from .env (see the compose entrypoint).
+# Signaling (7880) is reached only through Caddy on 443; ufw keeps 7880 closed to the internet.
+port: 7880
+rtc:
+  tcp_port: 7881 # WebRTC over TCP, for callers whose network blocks UDP
+  port_range_start: 50000 # WebRTC media over UDP, one port per track
+  port_range_end: 60000
+  use_external_ip: true # advertise the public IP to clients, also behind a provider's NAT
+logging:
+  level: info

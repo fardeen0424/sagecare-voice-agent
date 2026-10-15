@@ -1,5 +1,6 @@
-# The three model services of one GPU cell. Ports bind to 127.0.0.1 because Docker's own
-# iptables rules would make a published port public even with ufw blocking it.
+# One GPU cell: three model services, LiveKit (WebRTC) and Caddy (TLS). Model ports bind to 127.0.0.1
+# because Docker's own iptables rules would make a published port public even with ufw blocking it.
+# LiveKit and Caddy use host networking instead, so ufw (scripts/open_ports.sh) decides what is public.
 
 x-gpu: &gpu
   restart: always
@@ -70,3 +71,26 @@ services:
       - /srv/voice/.cache/tts:/cache
     ports: ["127.0.0.1:8002:8002"]
     healthcheck: { <<: *health, test: [CMD, curl, -fs, localhost:8002/health] }
+
+  livekit:
+    image: livekit/livekit-server:v1.13.9@sha256:d0c04791bf63ca8dcea123571827d56ba9504bd57c8d5de60ee03b5408cc3154
+    container_name: livekit
+    restart: always
+    network_mode: host # 10k UDP media ports: no per-port Docker proxies, and ufw applies
+    env_file: ../.env
+    entrypoint: [sh, -c, 'exec /livekit-server --config /etc/livekit.yaml --keys "$$LIVEKIT_API_KEY: $$LIVEKIT_API_SECRET"']
+    volumes: [./livekit/livekit.yaml:/etc/livekit.yaml:ro]
+    healthcheck: { <<: *health, test: [CMD, wget, -qO-, http://127.0.0.1:7880] }
+
+  caddy:
+    image: caddy:2.11.6@sha256:3422ce6de165df66534f9b9ba50efaf457114ec961763cc52f5dbdaac2972d73
+    container_name: caddy
+    restart: always
+    network_mode: host # serves 80/443 directly
+    env_file: ../.env
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data # certificates; Let's Encrypt rate-limits re-issuing them
+
+volumes:
+  caddy-data:

@@ -11,6 +11,12 @@ if [ "${1:-}" != "--pulled" ]; then
 fi
 
 [ -f .env ] || { echo ".env missing: copy .env.example to .env and fill it in."; exit 1; }
+env_default () { grep -q "^$1=." .env || { sed -i "/^$1=/d" .env; echo "$1=$2" >> .env; }; }   # keeps set values
+domain="$(hostname -I | awk '{print $1}').compute.verda.run"   # Verda's free DNS name for the public IP
+env_default LIVEKIT_DOMAIN "$domain"
+env_default LIVEKIT_URL "wss://$(sed -n 's/^LIVEKIT_DOMAIN=//p' .env)"
+env_default LIVEKIT_API_KEY "API$(openssl rand -hex 6)"
+env_default LIVEKIT_API_SECRET "$(openssl rand -hex 32)"
 mkdir -p .cache/vllm .cache/tts # compile caches; Docker would create them root-owned
 ./scripts/download_models.sh
 

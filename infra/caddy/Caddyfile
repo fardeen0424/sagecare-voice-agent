@@ -1,0 +1,5 @@
+# HTTPS for the server's public name. Caddy gets and renews the Let's Encrypt certificate itself
+# (challenge on port 80) and proxies browsers' secure WebSocket to LiveKit signaling.
+{$LIVEKIT_DOMAIN} {
+	reverse_proxy 127.0.0.1:7880
+}

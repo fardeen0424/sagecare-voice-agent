@@ -105,9 +105,8 @@ if [ ! -f "$APP/.env" ]; then
   sed -i "s|^HF_TOKEN=.*|HF_TOKEN=$token|" "$APP/.env"
 fi
 
-say "Firewall: SSH only (later phases open 443, SIP, RTP explicitly)"
-ufw allow OpenSSH
-ufw --force enable
+say "Firewall: SSH, HTTPS and WebRTC only"
+bash "$APP/scripts/open_ports.sh"
 
 say "SSH hardening: no root login, keys only"
 cat > /etc/ssh/sshd_config.d/01-voice-hardening.conf <<'EOF'

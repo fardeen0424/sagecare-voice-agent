@@ -27,7 +27,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger("stt")
 
 processor = AutoProcessor.from_pretrained(MODEL_PATH)
-model = AutoModelForRNNT.from_pretrained(MODEL_PATH, device_map="cuda").eval()
+model = AutoModelForRNNT.from_pretrained(MODEL_PATH).to("cuda").eval()
 processor.set_num_lookahead_tokens(LOOKAHEAD)
 SR = processor.feature_extractor.sampling_rate
 HOP = processor.feature_extractor.hop_length

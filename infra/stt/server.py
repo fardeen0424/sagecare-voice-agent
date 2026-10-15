@@ -71,9 +71,12 @@ def transcribe(audio_q: queue.Queue, language: str, emit) -> str:
 
     def chunks():  # same chunking as the model card's streaming example, but audio arrives live
         yield first.input_features[:, : processor.num_mel_frames_first_audio_chunk, :]
-        mel = processor.num_mel_frames_first_audio_chunk
-        while have((start := mel * HOP - N_FFT // 2) + processor.num_samples_per_audio_chunk):
-            yield features(buf[start : start + processor.num_samples_per_audio_chunk], first=False).input_features
+        mel, size = processor.num_mel_frames_first_audio_chunk, processor.num_samples_per_audio_chunk
+        while True:
+            start = mel * HOP - N_FFT // 2
+            if not have(start + size):
+                return
+            yield features(buf[start : start + size], first=False).input_features
             mel += processor.num_mel_frames_per_audio_chunk
 
     streamer = Partials(emit)
@@ -134,5 +137,4 @@ async def stream(ws: WebSocket, language: str = "en-US"):
     finally:
         if audio_q is not None:
             audio_q.put(None)  # let the worker thread finish
-        await asyncio.sleep(0.05)  # flush queued messages
         sender.cancel()

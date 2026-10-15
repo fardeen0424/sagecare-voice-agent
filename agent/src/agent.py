@@ -5,6 +5,7 @@ Every finished turn appends one JSON line to $TURN_LOG with the framework's late
 """
 
 import json
+import logging
 import os
 import time
 
@@ -17,6 +18,7 @@ from fish_tts import FishTTS
 from nemotron_stt import NemotronSTT
 
 TURN_LOG = os.environ.get("TURN_LOG", "/logs/turns.jsonl")
+log = logging.getLogger("agent")
 INSTRUCTIONS = (
     "You are Sage, a friendly care-navigation assistant for a clinic, speaking with a patient on a call. "
     "You help them book appointments. Reply in one or two short spoken sentences: plain words, no lists, "
@@ -48,8 +50,14 @@ async def entrypoint(ctx: JobContext) -> None:
 
     @session.on("user_state_changed")
     def _finalize_stt(ev) -> None:
+        log.info("user %s -> %s", ev.old_state, ev.new_state)
         if ev.old_state == "speaking":
             stt.end_utterance()
+
+    @session.on("user_input_transcribed")
+    def _log_transcript(ev) -> None:
+        if ev.is_final:
+            log.info("user said: %s", ev.transcript)
 
     @session.on("conversation_item_added")
     def _log_turn(ev) -> None:

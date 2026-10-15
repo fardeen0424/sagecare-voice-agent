@@ -53,9 +53,10 @@ def post(url: str, body: dict):
     return urllib.request.urlopen(req, timeout=60)
 
 
-def chat(user: str, **extra) -> dict:
-    messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]
-    with post(LLM, {"model": "qwen3.8-27b", "max_tokens": 200, "messages": messages, **extra}) as resp:
+def chat(system: str, user: str, **extra) -> dict:
+    messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+    body = {"model": "qwen3.8-27b", "max_tokens": 200, "temperature": 0, "messages": messages, **extra}
+    with post(LLM, body) as resp:
         return json.load(resp)["choices"][0]
 
 
@@ -108,11 +109,12 @@ def summary(name: str, values: list[float]) -> str:
 
 
 def main(rounds: int) -> None:
-    reply = chat("Hi, I need to see a doctor about my knee.")["message"]
+    reply = chat(SYSTEM, "Hi, I need to see a doctor about my knee.")["message"]
     assert reply["content"].strip() and not reply.get("reasoning"), f"bad LLM reply: {reply}"
     print("ok   llm reply:", reply["content"].strip()[:80])
 
-    choice = chat("Can you find me an orthopedics slot next Tuesday morning?", tools=[FIND_SLOTS])
+    choice = chat("You are a clinic scheduling assistant. Use tools to find appointment slots.",
+                  "Can you find me an orthopedics slot next Tuesday morning?", tools=[FIND_SLOTS])
     assert choice["finish_reason"] == "tool_calls", f"no tool call: {choice}"
     call = choice["message"]["tool_calls"][0]["function"]
     print("ok   llm tool call:", call["name"], call["arguments"])

@@ -1,36 +1,23 @@
 #!/usr/bin/env bash
-# Deploys the latest main on the GPU server: pull, download missing weights, start services,
-# wait until healthy, smoke test. Safe to re-run. Run as the app user from /srv/voice.
+# Deploys the latest main on the GPU server: pull, download missing weights, build and start the
+# services, wait until all are healthy, then run the end-to-end check. Safe to re-run.
 set -euo pipefail
 cd /srv/voice
 
-# Pull first, then restart this script so the freshly pulled version is the one that runs.
+# Pull first, then re-exec so the freshly pulled version of this script is the one that runs.
 if [ "${1:-}" != "--pulled" ]; then
   git pull --ff-only
   exec "$0" --pulled
 fi
 
 [ -f .env ] || { echo ".env missing: copy .env.example to .env and fill it in."; exit 1; }
-mkdir -p .cache/vllm .cache/fish   # compile caches; Docker would create them root-owned otherwise
-chmod 777 .cache/fish              # the fish image runs as uid 1000, not as this user
-
+mkdir -p .cache/vllm .cache/tts # compile caches; Docker would create them root-owned
 ./scripts/download_models.sh
 
 compose="docker compose -f infra/docker-compose.yml"
-$compose up -d --build --remove-orphans
+echo "Starting services (first start on a new GPU compiles kernels for several minutes)..."
+$compose up -d --build --remove-orphans --wait --wait-timeout 1800 \
+  || { $compose ps -a; $compose logs --tail 60; echo "A service did not become healthy."; exit 1; }
 
-echo "Waiting for services to become healthy (first start on a new GPU takes several minutes)..."
-for _ in $(seq 1 120); do   # 120 x 10 s = 20 min
-  states=$(docker inspect -f '{{.Name}} {{.State.Health.Status}} {{.RestartCount}}' $($compose ps -aq))
-  if echo "$states" | awk '$3 > 0 || $2 == "unhealthy" {bad=1} END {exit !bad}'; then
-    echo "$states"; $compose logs --tail 60; echo "A service crashed or is unhealthy."; exit 1
-  fi
-  if ! echo "$states" | grep -qv ' healthy '; then
-    echo "$states"; break
-  fi
-  sleep 10
-done
-echo "$states" | grep -qv ' healthy ' && { echo "$states"; echo "Timed out waiting for health."; exit 1; }
-
-./scripts/smoke_test.sh
+$compose exec -T stt python - 1 < scripts/check.py
 echo "Deploy OK: $(git log --oneline -1)"

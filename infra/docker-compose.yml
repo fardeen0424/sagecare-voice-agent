@@ -59,7 +59,7 @@ services:
     build: ./tts # SGLang-Omni serving Fish S2 Pro, streams audio while it is generated
     image: voice-tts:local
     container_name: tts
-    depends_on: { llm: { condition: service_healthy } }
+    depends_on: { stt: { condition: service_healthy } } # sizes itself from what vLLM and STT leave free
     ipc: host
     command: [sgl-omni, serve, --config, /app/s2pro.yaml, --port, "8002"]
     environment:

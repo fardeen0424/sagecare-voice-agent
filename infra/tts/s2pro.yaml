@@ -5,6 +5,7 @@ model_path: /models/fish-s2-pro
 stages:
   tts_engine:
     engine:
-      # Weights + KV cache as a share of the whole GPU. The default (0.85) assumes the GPU to itself;
-      # here vLLM holds 60% and STT ~3 GB. Preprocessing and the vocoder sit outside this budget.
-      mem_fraction_static: 0.18
+      # Weights + KV cache as a share of the GPU memory still free when TTS starts (~28 GB on an
+      # H100 after vLLM and STT). Weights alone need 0.27; the rest of the free memory is left for
+      # preprocessing's 6 GiB reference-codec budget and the vocoder. The default 0.85 would starve them.
+      mem_fraction_static: 0.5

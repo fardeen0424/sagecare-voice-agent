@@ -9,3 +9,8 @@ stages:
       # H100 after vLLM and STT). Weights alone need 0.27; the rest of the free memory is left for
       # preprocessing's 6 GiB reference-codec budget and the vocoder. The default 0.85 would starve them.
       mem_fraction_static: 0.5
+  vocoder:
+    factory:
+      # Tokens (~46 ms of audio each) before the first audio chunk. The default 40 waits ~1.9 s of
+      # speech, ~420 ms of generation, before a caller hears anything. Later chunks stay at 45.
+      stream_stride: 10

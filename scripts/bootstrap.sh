@@ -4,7 +4,8 @@
 # From the laptop, as root on the new server (the provider's initial login):
 #   scp scripts/bootstrap.sh root@NEW_IP:/root/
 #   ssh -t root@NEW_IP "bash /root/bootstrap.sh"
-# It asks for: a sudo password for the user, adding the deploy key on GitHub, and HF_TOKEN.
+# It asks for a sudo password for the user, for adding the deploy key on GitHub, and for HF_TOKEN
+# (or pass it: ssh -t root@NEW_IP "HF_TOKEN=... bash /root/bootstrap.sh"). It ends by starting the deploy.
 # At the end root login and password login are disabled; reconnect as the user.
 set -euo pipefail
 
@@ -96,10 +97,11 @@ done
 say "Secrets ($APP/.env)"
 if [ ! -f "$APP/.env" ]; then
   install -m 600 -o "$USER_NAME" -g "$USER_NAME" "$APP/.env.example" "$APP/.env"
-  if [ -t 0 ]; then
+  token=${HF_TOKEN:-}
+  if [ -z "$token" ] && [ -t 0 ]; then
     read -rsp "HF_TOKEN (Hugging Face read token): " token; echo
-    sed -i "s|^HF_TOKEN=.*|HF_TOKEN=$token|" "$APP/.env"
   fi
+  sed -i "s|^HF_TOKEN=.*|HF_TOKEN=$token|" "$APP/.env"
 fi
 
 say "Firewall: SSH only (later phases open 443, SIP, RTP explicitly)"
@@ -114,6 +116,6 @@ KbdInteractiveAuthentication no
 EOF
 sshd -t && systemctl reload ssh
 
-say "Done. Next, from the laptop (point the 'verda' alias in ~/.ssh/config at the new IP first):"
-echo "  ssh verda \"tmux new -d -s deploy 'cd $APP && ./scripts/deploy.sh > /tmp/deploy.log 2>&1'\""
-echo "  ssh verda \"tail -n 20 /tmp/deploy.log\""
+say "Deploying in the background (downloads weights, builds, starts, checks; ~20 min on a new server)"
+as_user "tmux new -d -s deploy 'cd $APP && ./scripts/deploy.sh > /tmp/deploy.log 2>&1'"
+echo "Server ready. Reconnect as $USER_NAME and follow: tail -n 20 /tmp/deploy.log (ends with 'Deploy OK')."

@@ -23,7 +23,8 @@ It installs automatic security updates, fail2ban, Docker and the NVIDIA Containe
 allows only SSH through ufw, and turns off root and password login. Re-run it after any interruption: it
 skips steps that are already done. If it installs a driver, reboot and run it again.
 
-Then point the `verda` alias in `~/.ssh/config` at the new IP and deploy.
+It ends by starting `deploy.sh` in the background, so the three models come up on their own. Point the
+`verda` alias in `~/.ssh/config` at the new IP and follow `ssh verda "tail -n 20 /tmp/deploy.log"`.
 
 ## Deploy (every change)
 

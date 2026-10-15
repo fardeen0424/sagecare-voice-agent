@@ -58,7 +58,8 @@ if ! command -v nvidia-ctk >/dev/null; then
   nvidia-ctk runtime configure --runtime=docker
   systemctl restart docker
 fi
-docker run --rm --gpus all nvidia/cuda:12.8.0-base-ubuntu24.04 nvidia-smi -L
+docker run --rm --gpus all \
+  nvidia/cuda:12.8.0-base-ubuntu24.04@sha256:e778509d37d66475120929671500377524f7278478ba08131b07ef3ffcc0dce0 nvidia-smi -L
 
 say "User $USER_NAME (key-only SSH, sudo with password, docker group)"
 id "$USER_NAME" >/dev/null 2>&1 || adduser --disabled-password --gecos "" "$USER_NAME"

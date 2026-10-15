@@ -32,3 +32,9 @@ assert c["finish_reason"] == "tool_calls", c
 call = c["message"]["tool_calls"][0]["function"]
 assert call["name"] == "find_slots", call
 print("ok   llm tool call:", call["name"], json.loads(call["arguments"]))'
+
+curl -fsS http://127.0.0.1:8080/v1/health >/dev/null && echo "ok   tts health"
+curl -fsS http://127.0.0.1:8001/health >/dev/null && echo "ok   stt health"
+# TTS speaks a sentence, STT must hear it back
+out=$(docker compose -f /srv/voice/infra/docker-compose.yml exec -T stt python - 1 < /srv/voice/scripts/speech_latency.py)
+echo "ok   speech round trip: ${out%%$'\n'*}"

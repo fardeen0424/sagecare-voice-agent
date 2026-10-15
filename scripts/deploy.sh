@@ -11,12 +11,13 @@ if [ "${1:-}" != "--pulled" ]; then
 fi
 
 [ -f .env ] || { echo ".env missing: copy .env.example to .env and fill it in."; exit 1; }
-mkdir -p .cache/vllm   # vLLM compile cache; Docker would create it root-owned otherwise
+mkdir -p .cache/vllm .cache/fish   # compile caches; Docker would create them root-owned otherwise
+chmod 777 .cache/fish              # the fish image runs as uid 1000, not as this user
 
 ./scripts/download_models.sh
 
 compose="docker compose -f infra/docker-compose.yml"
-$compose up -d --remove-orphans
+$compose up -d --build --remove-orphans
 
 echo "Waiting for services to become healthy (first start on a new GPU takes several minutes)..."
 for _ in $(seq 1 120); do   # 120 x 10 s = 20 min

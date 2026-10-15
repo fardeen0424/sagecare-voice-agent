@@ -8,6 +8,11 @@ Self-hosted real-time healthcare voice agent. All three models run on one GPU se
 | `llm` | Qwen3.8-27B FP8 | vLLM 0.31.0 (OpenAI API) | 8000 |
 | `stt` | Nemotron 3.5 ASR streaming | our WebSocket wrapper ([infra/stt](infra/stt)) | 8001 |
 | `tts` | Fish S2 Pro | SGLang-Omni 0.1.8 (`/v1/audio/speech`) | 8002 |
+| `livekit` | — | LiveKit server 1.13.9 (WebRTC), signaling behind Caddy | 7880 local, 7881/tcp, 50000–60000/udp |
+| `caddy` | — | Caddy 2.11.6, Let's Encrypt TLS for `LIVEKIT_DOMAIN` | 80, 443 |
+| `agent` | — | LiveKit Agents 1.8.8 worker ([agent/src](agent/src)): VAD, turn detector, STT → LLM → TTS | 8081 local |
+
+Public ports are opened by [scripts/open_ports.sh](scripts/open_ports.sh) (`bootstrap.sh` runs it).
 
 ## New GPU server (Ubuntu 24.04, NVIDIA driver >= 580)
 
@@ -36,7 +41,7 @@ ssh verda "tail -n 20 /tmp/deploy.log"
 ```
 
 `deploy.sh` pulls, downloads missing weights, builds and starts the services, waits until all are healthy,
-and runs one round of `scripts/check.py`. The last line is `Deploy OK: <commit>`, or it prints the failing
+and runs one round of `scripts/check.py` plus a two-turn simulated call. The last line is `Deploy OK: <commit>`, or it prints the failing
 service's logs.
 
 ## Check and benchmark
@@ -46,4 +51,12 @@ prints p50/p95 latency for each model over N rounds:
 
 ```
 ssh verda "cd /srv/voice && docker compose -f infra/docker-compose.yml exec -T stt python - 20 < scripts/check.py"
+```
+
+`agent/src/caller.py` is a simulated caller: it joins a room, speaks patient lines in real time and
+reports perceived latency (end of its speech to the agent's first audio) next to the agent's own
+`e2e_latency`. Every turn's metrics are in `/srv/voice/logs/turns.jsonl`.
+
+```
+ssh verda "cd /srv/voice && docker compose -f infra/docker-compose.yml exec -T agent python caller.py 10"
 ```

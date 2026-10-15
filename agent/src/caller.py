@@ -75,7 +75,10 @@ async def main(turns: int) -> None:
             if track.kind == rtc.TrackKind.KIND_AUDIO else None)
     await room.connect(LIVEKIT_URL, token)
     source = rtc.AudioSource(SR, 1)
-    await room.local_participant.publish_track(rtc.LocalAudioTrack.create_audio_track("mic", source))
+    await room.local_participant.publish_track(  # the agent only listens to microphone tracks
+        rtc.LocalAudioTrack.create_audio_track("mic", source),
+        rtc.TrackPublishOptions(source=rtc.TrackSource.SOURCE_MICROPHONE),
+    )
 
     latencies = []
     async with aiohttp.ClientSession() as http:

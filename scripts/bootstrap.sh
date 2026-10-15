@@ -11,7 +11,7 @@ set -euo pipefail
 USER_NAME=${USER_NAME:-fardeen}
 REPO=${REPO:-git@github.com:fardeen0424/sagecare-voice-agent.git}
 APP=/srv/voice
-MIN_DRIVER=580   # the vLLM image is built on CUDA 13.0, which needs driver >= 580
+MIN_DRIVER=580   # the vLLM and SGLang images are built on CUDA 13.0, which needs driver >= 580
 
 say () { echo -e "\n==> $*"; }
 as_user () { sudo -u "$USER_NAME" -H bash -c "$1"; }
@@ -38,8 +38,9 @@ say "Docker"
 if ! command -v docker >/dev/null; then
   install -m 0755 -d /etc/apt/keyrings
   curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-  echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
-    > /etc/apt/sources.list.d/docker.list
+  codename=$(. /etc/os-release && echo "$VERSION_CODENAME")
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc]" \
+    "https://download.docker.com/linux/ubuntu $codename stable" > /etc/apt/sources.list.d/docker.list
   apt-get update -q
   apt-get install -yq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 fi
@@ -77,7 +78,12 @@ install -d -o "$USER_NAME" -g "$USER_NAME" /models "$APP"
 say "Read-only GitHub deploy key"
 if [ ! -f "$home/.ssh/github_deploy" ]; then
   as_user "ssh-keygen -q -t ed25519 -N '' -C 'voice-agent deploy key' -f ~/.ssh/github_deploy"
-  as_user "printf 'Host github.com\n    IdentityFile ~/.ssh/github_deploy\n    IdentitiesOnly yes\n    StrictHostKeyChecking accept-new\n' >> ~/.ssh/config && chmod 600 ~/.ssh/config"
+  as_user "cat >> ~/.ssh/config && chmod 600 ~/.ssh/config" <<'EOF'
+Host github.com
+    IdentityFile ~/.ssh/github_deploy
+    IdentitiesOnly yes
+    StrictHostKeyChecking accept-new
+EOF
 fi
 until as_user "git ls-remote $REPO >/dev/null 2>&1"; do
   echo "Add this key on GitHub: repo > Settings > Deploy keys > Add (leave write access off):"

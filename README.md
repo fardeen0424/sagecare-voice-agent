@@ -1,7 +1,7 @@
 # voice-agent
 
-Self-hosted real-time healthcare voice agent. All three models run on one GPU server
-([infra/docker-compose.yml](infra/docker-compose.yml)), each bound to `127.0.0.1`:
+Self-hosted real-time healthcare voice agent. The whole stack runs on one GPU server
+([infra/docker-compose.yml](infra/docker-compose.yml)); everything not listed as public binds to `127.0.0.1`:
 
 | Service | Model | Server | Port |
 |---|---|---|---|
@@ -41,8 +41,8 @@ ssh verda "tail -n 20 /tmp/deploy.log"
 ```
 
 `deploy.sh` pulls, downloads missing weights, builds and starts the services, waits until all are healthy,
-and runs one round of `scripts/check.py` plus a two-turn simulated call. The last line is `Deploy OK: <commit>`, or it prints the failing
-service's logs.
+and runs one round of `scripts/check.py` plus a two-turn simulated call. The last line is
+`Deploy OK: <commit>`, or it prints the failing service's logs.
 
 ## Check and benchmark
 

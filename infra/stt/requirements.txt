@@ -1,3 +1,4 @@
 transformers==5.20.0
 fastapi==0.143.2
 uvicorn[standard]==0.54.0
+librosa==1.0.0                # needed by the Nemotron feature extractor

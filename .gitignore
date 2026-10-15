@@ -7,3 +7,4 @@ node_modules/
 models/*
 !models/.gitkeep
 !models/README.md
+.cache/

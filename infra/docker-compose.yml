@@ -1,0 +1,43 @@
+services:
+  llm:
+    image: vllm/vllm-openai:latest      # pin an exact version once it works
+    container_name: llm
+    restart: always
+    ipc: host                            # vLLM needs shared memory between its processes
+    entrypoint: ["vllm", "serve"]
+    command:
+      - /models/qwen3.8-27b-fp8
+      - --served-model-name
+      - qwen3.8-27b
+      - --max-model-len
+      - "32768"
+      - --kv-cache-dtype
+      - fp8
+      - --gpu-memory-utilization
+      - "0.50"
+      - --enable-prefix-caching
+      - --reasoning-parser
+      - qwen3
+      - --enable-auto-tool-choice
+      - --tool-call-parser
+      - qwen3_coder
+      - --default-chat-template-kwargs
+      - '{"enable_thinking": false}'
+    volumes:
+      - /models:/models:ro
+      - /srv/voice/.cache/vllm:/root/.cache/vllm
+    ports:
+      - "127.0.0.1:8000:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 900s

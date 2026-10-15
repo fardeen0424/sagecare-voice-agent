@@ -20,8 +20,8 @@ from fastapi import FastAPI, WebSocket
 from transformers import AutoModelForRNNT, AutoProcessor, TextStreamer
 
 MODEL_PATH = os.environ.get("STT_MODEL_PATH", "/models/nemotron-3.5-asr")
-# Right context in 80 ms frames (0, 1, 3, 6 or 13): lower = faster finals, higher = fewer word errors.
-LOOKAHEAD = int(os.environ.get("STT_LOOKAHEAD", "1"))
+# Right context in 80 ms frames (0, 3, 6 or 13 in Transformers): lower = faster finals, higher = fewer word errors.
+LOOKAHEAD = int(os.environ.get("STT_LOOKAHEAD", "3"))
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("stt")

@@ -8,3 +8,5 @@ models/*
 !models/.gitkeep
 !models/README.md
 .cache/
+.claude/
+scratch/

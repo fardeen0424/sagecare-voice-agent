@@ -1,7 +1,9 @@
 """LiveKit STT plugin for our Nemotron streaming service (protocol in infra/stt/server.py).
 
 The service finalizes an utterance only when told to, so the agent calls end_utterance() when VAD
-reports that the caller stopped speaking; interim text streams in the meantime.
+reports that the caller stopped speaking; interim text streams in the meantime. A partial that ends a
+sentence (Nemotron writes punctuation) is sent as a preflight transcript: an eager end of turn that lets
+preemptive generation start before VAD has heard enough silence.
 """
 
 import asyncio
@@ -63,11 +65,16 @@ class NemotronStream(stt.RecognizeStream):
             async def receive() -> None:
                 async for msg in ws:
                     data = json.loads(msg.data)
-                    final = data["type"] == "final"
-                    if final and not data["text"]:
-                        continue  # "end" with no speech in it
-                    kind = stt.SpeechEventType.FINAL_TRANSCRIPT if final else stt.SpeechEventType.INTERIM_TRANSCRIPT
-                    alt = stt.SpeechData(language=self._nemotron._language, text=data["text"])
+                    text = data["text"]
+                    if data["type"] == "final":
+                        if not text:
+                            continue  # "end" with no speech in it
+                        kind = stt.SpeechEventType.FINAL_TRANSCRIPT
+                    elif text.endswith((".", "?", "!")):
+                        kind = stt.SpeechEventType.PREFLIGHT_TRANSCRIPT
+                    else:
+                        kind = stt.SpeechEventType.INTERIM_TRANSCRIPT
+                    alt = stt.SpeechData(language=self._nemotron._language, text=text)
                     self._event_ch.send_nowait(stt.SpeechEvent(type=kind, alternatives=[alt]))
 
             tasks = [asyncio.create_task(send()), asyncio.create_task(receive())]

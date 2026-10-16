@@ -8,11 +8,13 @@ Protocol, one WebSocket per call at /v1/stream?language=en-US ("auto" detects th
 """
 
 import asyncio
+import copy
 import json
 import logging
 import os
 import queue
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 import torch
@@ -80,16 +82,20 @@ def transcribe(audio_q: queue.Queue, language: str, emit) -> str:
             mel += processor.num_mel_frames_per_audio_chunk
 
     streamer = Partials(emit)
-    # shortcut: one generate() per stream, no batching across calls; fine for tens of calls,
-    # move to NeMo batched cache-aware streaming if one GPU must serve hundreds.
+    # Transformers keeps generate()'s per-call state as attributes on the model object, so parallel
+    # utterances on one model overwrite each other and crash. A shallow copy per utterance keeps that
+    # state apart while sharing the weights.
+    # shortcut: one generate() per utterance, no batching across calls; move to NeMo batched
+    # cache-aware streaming if one GPU must serve hundreds of streams.
+    local = copy.copy(model)
     with torch.inference_mode():
-        model.generate(**{**first, "input_features": chunks()}, streamer=streamer)
+        local.generate(**{**first, "input_features": chunks()}, streamer=streamer)
         if streamer.text.strip():
             return streamer.text.strip()
         # Streaming emits only blanks on very short utterances ("No.", "Hi."), which a full-context
         # pass over the same audio gets right; it costs one extra decode, only for those.
         inputs = processor(buf, sampling_rate=SR, language=language, return_tensors="pt")
-        out = model.generate(**inputs.to(model.device, dtype=model.dtype), return_dict_in_generate=True)
+        out = local.generate(**inputs.to(model.device, dtype=model.dtype), return_dict_in_generate=True)
         return processor.decode(out.sequences, skip_special_tokens=True)[0].strip()
 
 
@@ -106,6 +112,7 @@ def warm_up():
 
 warm_up()
 app = FastAPI()
+workers = ThreadPoolExecutor(max_workers=128)  # one per speaking caller; asyncio's default caps at ~36
 
 
 @app.get("/health")
@@ -131,7 +138,7 @@ async def stream(ws: WebSocket, language: str = "en-US"):
             if msg.get("bytes"):
                 if audio_q is None:
                     audio_q = queue.Queue()
-                    job = asyncio.create_task(asyncio.to_thread(transcribe, audio_q, language, emit))
+                    job = loop.run_in_executor(workers, transcribe, audio_q, language, emit)
                 audio_q.put(np.frombuffer(msg["bytes"], np.int16).astype(np.float32) / 32768)
             elif msg.get("text") and json.loads(msg["text"]).get("type") == "end":
                 text = ""

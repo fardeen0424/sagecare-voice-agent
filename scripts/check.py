@@ -147,6 +147,15 @@ def main(rounds: int) -> None:
     assert words(heard) == ["no"], f"STT heard {heard!r} for 'No.'"
     print("ok   short reply: 'No.' ->", repr(heard))
 
+    # Parallel callers: STT used to crash when two utterances decoded at once (state shared on the model).
+    clips = [(said, to_16k(*tts(said)[2:])) for said in SENTENCES] * 2
+    async def parallel():
+        return await asyncio.gather(*(stt(audio) for _, audio in clips))
+    for (said, _), (_, heard) in zip(clips, asyncio.run(parallel())):
+        assert sum(w in set(words(heard)) for w in words(said)) / len(words(said)) >= 0.7, \
+            f"parallel STT heard {heard!r} for {said!r}"
+    print(f"ok   {len(clips)} parallel STT streams heard correctly")
+
     print("\n" + "\n".join([
         summary("LLM first token", ttft),
         summary("TTS first audio", ttfa),

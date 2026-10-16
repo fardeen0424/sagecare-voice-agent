@@ -10,7 +10,7 @@ SAMPLE_RATE = 44100  # S2 Pro's DAC codec
 
 
 class FishTTS(tts.TTS):
-    def __init__(self, url: str = "http://127.0.0.1:8002/v1/audio/speech", voice: str = "default") -> None:
+    def __init__(self, url: str = "http://127.0.0.1:8002/v1/audio/speech", voice: str = "sage") -> None:
         super().__init__(capabilities=tts.TTSCapabilities(streaming=False), sample_rate=SAMPLE_RATE, num_channels=1)
         self._url, self._voice = url, voice
 

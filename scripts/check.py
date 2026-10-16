@@ -74,7 +74,7 @@ def tts(text: str) -> tuple[float, float, np.ndarray, int]:
     """Streams raw PCM16. Returns time to first audio (ms), the longest stall (ms) a listener playing
     from the first byte would hear while waiting for the next chunk, the audio and its sample rate."""
     start = time.perf_counter()
-    with post(TTS, {"input": text, "voice": "default", "stream": True, "response_format": "pcm"}) as resp:
+    with post(TTS, {"input": text, "voice": "sage", "stream": True, "response_format": "pcm"}) as resp:
         rate, chunks, stall = int(resp.headers["X-Sample-Rate"]), [], 0.0
         while chunk := resp.read1():
             now = time.perf_counter()

@@ -58,7 +58,7 @@ class Ears:
 
 
 async def tts_frames(http: aiohttp.ClientSession, text: str) -> list[rtc.AudioFrame]:
-    body = {"input": text, "voice": "default", "stream": True, "response_format": "pcm"}
+    body = {"input": text, "voice": "sage", "stream": True, "response_format": "pcm"}
     async with http.post(TTS_URL, json=body) as resp:
         pcm, rate = await resp.read(), int(resp.headers["X-Sample-Rate"])
     resampler = rtc.AudioResampler(input_rate=rate, output_rate=SR, num_channels=1)

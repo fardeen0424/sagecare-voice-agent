@@ -6,5 +6,6 @@ rtc:
   port_range_start: 50000 # WebRTC media over UDP, one port per track
   port_range_end: 60000
   use_external_ip: true # advertise the public IP to clients, also behind a provider's NAT
+  external_ip_only: true # don't offer Docker bridge IPs (172.x) as candidates; browsers can't reach them
 logging:
   level: info

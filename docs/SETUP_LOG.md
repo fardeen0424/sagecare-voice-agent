@@ -63,3 +63,27 @@ their fixes. Every step now runs from `scripts/bootstrap.sh` + `scripts/deploy.s
   `check.py` asserts "No." is heard. More trailing silence did not help and cost 75 ms.
 - MTP speculative decoding: 83 → 172 tokens/s. TTS chunks 7/14: 322 ms, no stall (`check.py` measures
   stalls now). Perceived latency 1000 → 816 ms p50 (ADR 013).
+
+## 2026-10-16 – First load test (1× H100, `scripts/loadtest.sh`, 4 turns per call)
+
+Bugs found and fixed before the numbers meant anything:
+- Parallel utterances crashed STT (`'Nemotron3_5AsrForRNNT' object has no attribute '_symbols_at_frame'`):
+  Transformers keeps generate()'s state on the model object. Fixed with a shallow model copy per utterance;
+  `check.py` now runs 10 parallel streams.
+- `Too many open files` from 25 calls: container default nofile 1024. Raised to 65536 for livekit and agent.
+- Agent flushed STT streams that had already ended (`NemotronStream input ended`); now skipped.
+
+Result after the fixes:
+
+| Calls | Answered | Perceived p50 / p95 | Transcript delay p50 | LLM TTFT p50 | TTS first audio p50 |
+|---|---|---|---|---|---|
+| 1 | 100% | 816 / 2128 ms | 254 ms | 76 ms | 346 ms |
+| 10 | 26/40 | 4137 / 7906 ms | 3557 ms | 74 ms | 352 ms |
+| 25 | 0/100 | — | — | — | 455 ms (greetings) |
+| 50 | 0/200 | — | — | — | 515 ms, p95 1071 ms (greetings) |
+
+Where it breaks: STT, at under 10 calls. One generate() thread per utterance contends for the Python GIL
+(STT CPU ~2 cores while the GPU idles ~10%), so transcripts fall seconds behind real time; every thread
+also adds CUDA workspace memory, and at 50 calls the GPU filled (STT 3 → 11.9 GB) and STT failed with
+`torch.OutOfMemoryError`. LLM latency stayed flat (TTFT ~75 ms) and never queued. TTS degrades under 50
+simultaneous greetings (p95 1.1 s) and is the next limit to measure once STT scales.

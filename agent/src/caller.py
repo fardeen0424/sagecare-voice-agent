@@ -99,6 +99,7 @@ async def main(turns: int) -> None:
     if ears.stream:
         await ears.stream.aclose()  # before the event loop closes, or the SDK's FFI handles complain
     await room.disconnect()
+    await source.aclose()
 
     with open(TURN_LOG) as f:
         e2e = [r["metrics"]["e2e_latency"] * 1000 for r in map(json.loads, f)

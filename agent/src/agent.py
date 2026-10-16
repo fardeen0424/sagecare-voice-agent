@@ -30,7 +30,7 @@ def setup(proc: JobProcess) -> None:
     # loaded once per worker process, not per call. A short silence closes the speech segment early,
     # which finalizes STT (see _finalize_stt) so preemptive LLM + TTS can start; the turn detector
     # and endpointing below still decide when the caller is really done.
-    proc.userdata["vad"] = silero.VAD.load(min_silence_duration=0.25)
+    proc.userdata["vad"] = silero.VAD.load(min_silence_duration=0.2)
 
 
 server = AgentServer(setup_fnc=setup)
@@ -46,7 +46,9 @@ async def entrypoint(ctx: JobContext) -> None:
         tts=tts.StreamAdapter(tts=FishTTS(), sentence_tokenizer=ClauseTokenizer()),
         turn_handling={
             "turn_detection": EnglishModel(),  # semantic end-of-turn model, local ONNX on CPU
-            "endpointing": {"min_delay": 0.3},  # wait after likely-complete speech; up to 3 s if not
+            # Reply 0.3 s after speech the turn detector calls complete; when it calls the speech unfinished,
+            # wait at most 2 s (default 3 s, which made pausing callers wait too long).
+            "endpointing": {"min_delay": 0.3, "max_delay": 2.0},
             "interruption": {"mode": "vad"},  # barge-in on voice activity; "adaptive" calls LiveKit Cloud
             "preemptive_generation": {"enabled": True, "preemptive_tts": True},
         },

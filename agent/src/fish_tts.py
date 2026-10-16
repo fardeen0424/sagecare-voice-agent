@@ -4,15 +4,20 @@ One request per text chunk; the session's StreamAdapter feeds it clause by claus
 is pushed to the room as soon as the first bytes arrive.
 """
 
+import json
+
 from livekit.agents import DEFAULT_API_CONNECT_OPTIONS, APIConnectOptions, tts, utils
 
 SAMPLE_RATE = 44100  # S2 Pro's DAC codec
+VOICE_FILE = "/voices/sage.json"  # reference voice as VQ codes (infra/tts/encode_voice.py)
 
 
 class FishTTS(tts.TTS):
-    def __init__(self, url: str = "http://127.0.0.1:8002/v1/audio/speech", voice: str = "sage") -> None:
+    def __init__(self, url: str = "http://127.0.0.1:8002/v1/audio/speech", voice_file: str = VOICE_FILE) -> None:
         super().__init__(capabilities=tts.TTSCapabilities(streaming=False), sample_rate=SAMPLE_RATE, num_channels=1)
-        self._url, self._voice = url, voice
+        # Every request carries the same reference: without one S2 Pro samples a new speaker each time.
+        with open(voice_file) as f:
+            self._url, self._references = url, [json.load(f)]
 
     @property
     def model(self) -> str:
@@ -28,7 +33,7 @@ class FishTTS(tts.TTS):
 
 class FishStream(tts.ChunkedStream):
     async def _run(self, output_emitter: tts.AudioEmitter) -> None:
-        body = {"input": self._input_text, "voice": self._tts._voice, "stream": True, "response_format": "pcm"}
+        body = {"input": self._input_text, "references": self._tts._references, "stream": True, "response_format": "pcm"}
         async with utils.http_context.http_session().post(self._tts._url, json=body) as resp:
             resp.raise_for_status()
             rate = int(resp.headers["X-Sample-Rate"])

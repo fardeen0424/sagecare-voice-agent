@@ -23,6 +23,7 @@ LLM = "http://llm:8000/v1/chat/completions"
 TTS = "http://tts:8002/v1/audio/speech"
 STT = "ws://localhost:8001/v1/stream?language=en-US"
 SYSTEM = "You are a friendly clinic scheduling assistant. Reply in one or two sentences."
+VOICE = [json.load(open("/voices/sage.json"))]  # the Sage reference voice as VQ codes (infra/tts/encode_voice.py)
 SENTENCES = [
     "Sure, I can help you book that appointment.",
     "I found an opening next Tuesday at ten thirty in the morning.",
@@ -74,7 +75,7 @@ def tts(text: str) -> tuple[float, float, np.ndarray, int]:
     """Streams raw PCM16. Returns time to first audio (ms), the longest stall (ms) a listener playing
     from the first byte would hear while waiting for the next chunk, the audio and its sample rate."""
     start = time.perf_counter()
-    with post(TTS, {"input": text, "voice": "sage", "stream": True, "response_format": "pcm"}) as resp:
+    with post(TTS, {"input": text, "references": VOICE, "stream": True, "response_format": "pcm"}) as resp:
         rate, chunks, stall = int(resp.headers["X-Sample-Rate"]), [], 0.0
         while chunk := resp.read1():
             now = time.perf_counter()

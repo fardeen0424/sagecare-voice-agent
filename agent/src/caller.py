@@ -21,6 +21,7 @@ from livekit import api, rtc
 LIVEKIT_URL = "ws://127.0.0.1:7880"
 TTS_URL = "http://127.0.0.1:8002/v1/audio/speech"
 TURN_LOG = os.environ.get("TURN_LOG", "/logs/turns.jsonl")
+CALLER_VOICE = 21  # a different seed from the agent's voice, so caller and agent are easy to tell apart
 SR = 48000
 FRAME = SR // 100  # 10 ms
 LOUD = 500  # int16 peak above which a frame counts as speech
@@ -58,7 +59,7 @@ class Ears:
 
 
 async def tts_frames(http: aiohttp.ClientSession, text: str) -> list[rtc.AudioFrame]:
-    body = {"input": text, "voice": "sage", "stream": True, "response_format": "pcm"}
+    body = {"input": text, "seed": CALLER_VOICE, "stream": True, "response_format": "pcm"}
     async with http.post(TTS_URL, json=body) as resp:
         pcm, rate = await resp.read(), int(resp.headers["X-Sample-Rate"])
     resampler = rtc.AudioResampler(input_rate=rate, output_rate=SR, num_channels=1)

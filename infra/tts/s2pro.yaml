@@ -11,6 +11,9 @@ stages:
       mem_fraction_static: 0.5
   vocoder:
     factory:
-      # Tokens (~46 ms of audio each) before the first audio chunk. The default 40 waits ~1.9 s of
-      # speech, ~420 ms of generation, before a caller hears anything. Later chunks stay at 45.
-      stream_stride: 10
+      # Tokens (~46 ms of audio each) per audio chunk. The defaults (40, then 45) wait ~1.9 s of speech,
+      # ~420 ms of generation, before a caller hears anything. A small first chunk must still hold more
+      # audio than the next chunk takes to generate, or playback stalls: 5/15 stalled ~100 ms at p95,
+      # 7/14 measured 322 ms to first audio with no stall (scripts/check.py).
+      stream_stride: 7
+      stream_followup_stride: 14

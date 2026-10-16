@@ -60,3 +60,9 @@ reports perceived latency (end of its speech to the agent's first audio) next to
 ```
 ssh verda "cd /srv/voice && docker compose -f infra/docker-compose.yml exec -T agent python caller.py 10"
 ```
+
+To talk to the agent from a browser, print a one-hour LiveKit Meet link and open it (allow the mic):
+
+```
+ssh verda "cd /srv/voice && docker compose -f infra/docker-compose.yml exec -T agent python join.py"
+```

@@ -25,6 +25,7 @@ services:
     entrypoint: [vllm, serve]
     # --max-num-seqs 32: the default 1024 exceeds the hybrid model's recurrent-state (Mamba) blocks.
     # Images/video off (voice is text-only), 16K context, 60% of the GPU, thinking off.
+    # MTP: the checkpoint's own multi-token-prediction head drafts 3 tokens per step (faster decode).
     command: >-
       /models/qwen3.8-27b-fp8
       --served-model-name qwen3.8-27b
@@ -37,6 +38,7 @@ services:
       --reasoning-parser qwen3
       --enable-auto-tool-choice --tool-call-parser qwen3_coder
       --default-chat-template-kwargs '{"enable_thinking": false}'
+      --speculative-config '{"method": "mtp", "num_speculative_tokens": 3}'
     volumes:
       - /models/qwen3.8-27b-fp8:/models/qwen3.8-27b-fp8:ro
       - /srv/voice/.cache/vllm:/root/.cache/vllm

@@ -22,7 +22,6 @@ from transformers import AutoModelForRNNT, AutoProcessor, TextStreamer
 MODEL_PATH = os.environ.get("STT_MODEL_PATH", "/models/nemotron-3.5-asr")
 # Right context in 80 ms frames (0, 3, 6 or 13 in Transformers): lower = faster finals, higher = fewer word errors.
 LOOKAHEAD = int(os.environ.get("STT_LOOKAHEAD", "3"))
-FLUSH_CHUNKS = 3  # chunks of silence appended on "end"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("stt")
@@ -56,9 +55,8 @@ def transcribe(audio_q: queue.Queue, language: str, emit) -> str:
         nonlocal buf, ended
         while len(buf) < n and not ended:
             item = audio_q.get()
-            if item is None:  # trailing silence gives the last words their right context; with one
-                # chunk, short utterances ("No.", "Hi.") came back empty
-                ended, item = True, np.zeros(FLUSH_CHUNKS * processor.num_samples_per_audio_chunk, np.float32)
+            if item is None:  # one chunk of silence gives the last words their right context
+                ended, item = True, np.zeros(processor.num_samples_per_audio_chunk, np.float32)
             buf = np.concatenate([buf, item])
         return len(buf) >= n
 

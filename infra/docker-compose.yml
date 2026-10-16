@@ -82,6 +82,7 @@ services:
     container_name: livekit
     restart: always
     network_mode: host # 10k UDP media ports: no per-port Docker proxies, and ufw applies
+    ulimits: { nofile: 65536 } # sockets per participant; the default 1024 runs out at ~25 calls
     env_file: ../.env
     entrypoint: [sh, -c, 'exec /livekit-server --config /etc/livekit.yaml --keys "$$LIVEKIT_API_KEY: $$LIVEKIT_API_SECRET"']
     volumes: [./livekit/livekit.yaml:/etc/livekit.yaml:ro]
@@ -103,6 +104,7 @@ services:
     container_name: agent
     restart: always
     network_mode: host # reaches LiveKit and the model ports on 127.0.0.1
+    ulimits: { nofile: 65536 } # "Too many open files" at 25 calls with the default 1024
     env_file: ../.env
     environment:
       LIVEKIT_URL: ws://127.0.0.1:7880 # local signaling; .env holds the public wss:// URL for browsers

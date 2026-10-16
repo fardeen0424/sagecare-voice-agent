@@ -3,8 +3,8 @@
 Runs inside the stt container, which has numpy and websockets and reaches the others by service name:
     docker compose -f infra/docker-compose.yml exec -T stt python - [ROUNDS] < scripts/check.py
 
-Fails (exit 1) unless the LLM replies without thinking, the LLM calls a tool, and STT hears back
-what TTS said. Over ROUNDS sentences it measures LLM time to first token, TTS time to first audio,
+Fails (exit 1) unless the LLM replies without thinking, the LLM calls a tool, TTS streams without
+an audible stall, and STT hears back what TTS said. Over ROUNDS sentences it measures LLM time to first token, TTS time to first audio,
 and STT time from end of speech to the final transcript.
 """
 
@@ -70,14 +70,20 @@ def llm_ttft() -> float:
     raise RuntimeError("LLM stream ended without content")
 
 
-def tts(text: str) -> tuple[float, np.ndarray, int]:
-    """Streams raw PCM16; returns time to first audio (ms), the audio and its sample rate."""
+def tts(text: str) -> tuple[float, float, np.ndarray, int]:
+    """Streams raw PCM16. Returns time to first audio (ms), the longest stall (ms) a listener playing
+    from the first byte would hear while waiting for the next chunk, the audio and its sample rate."""
     start = time.perf_counter()
     with post(TTS, {"input": text, "voice": "default", "stream": True, "response_format": "pcm"}) as resp:
-        first = resp.read1()
-        ttfa = (time.perf_counter() - start) * 1000
-        pcm = np.frombuffer(first + resp.read(), np.int16)
-        return ttfa, pcm, int(resp.headers["X-Sample-Rate"])
+        rate, chunks, stall = int(resp.headers["X-Sample-Rate"]), [], 0.0
+        while chunk := resp.read1():
+            now = time.perf_counter()
+            if not chunks:
+                first_at = now
+            due = first_at + sum(map(len, chunks)) / 2 / rate  # when playback runs out of audio
+            stall = max(stall, now - due)
+            chunks.append(chunk)
+    return (first_at - start) * 1000, stall * 1000, np.frombuffer(b"".join(chunks), np.int16), rate
 
 
 def to_16k(pcm: np.ndarray, rate: int) -> bytes:
@@ -120,21 +126,24 @@ def main(rounds: int) -> None:
     print("ok   llm tool call:", call["name"], call["arguments"])
 
     tts("Warm up.")
-    ttft, ttfa, final = [], [], []
+    ttft, ttfa, stalls, final = [], [], [], []
     for i in range(rounds):
         said = SENTENCES[i % len(SENTENCES)]
         ttft.append(llm_ttft())
-        ms, pcm, rate = tts(said)
+        ms, stall, pcm, rate = tts(said)
         ttfa.append(ms)
+        stalls.append(stall)
+        assert stall < 100, f"TTS playback stalled {stall:.0f} ms on {said!r}"
         final_ms, heard = asyncio.run(stt(to_16k(pcm, rate)))
         final.append(final_ms)
         recall = sum(w in set(words(heard)) for w in words(said)) / len(words(said))
         assert recall >= 0.7, f"STT heard {heard!r} for {said!r}"
-        print(f"ok   round trip: tts {ms:4.0f} ms, stt {final_ms:3.0f} ms | {said!r} -> {heard!r}")
+        print(f"ok   round trip: tts {ms:4.0f} ms (stall {stall:3.0f}), stt {final_ms:3.0f} ms | {said!r} -> {heard!r}")
 
     print("\n" + "\n".join([
         summary("LLM first token", ttft),
         summary("TTS first audio", ttfa),
+        summary("TTS longest stall", stalls),
         summary("STT end -> final", final),
     ]))
 

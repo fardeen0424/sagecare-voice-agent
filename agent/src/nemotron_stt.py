@@ -5,6 +5,7 @@ reports that the caller stopped speaking; interim text streams in the meantime.
 """
 
 import asyncio
+import contextlib
 import json
 import weakref
 
@@ -39,8 +40,9 @@ class NemotronSTT(stt.STT):
         return stream
 
     def end_utterance(self) -> None:
-        for stream in self._streams:
-            stream.flush()
+        for stream in list(self._streams):
+            with contextlib.suppress(RuntimeError):  # a stream that already ended has nothing to flush
+                stream.flush()
 
 
 class NemotronStream(stt.RecognizeStream):

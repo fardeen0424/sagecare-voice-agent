@@ -41,9 +41,11 @@ class Ears:
         self.armed_at: float | None = None
         self.reply = asyncio.Event()
         self.reply_at = 0.0
+        self.stream: rtc.AudioStream | None = None
 
     async def listen(self, track: rtc.Track) -> None:
-        async for ev in rtc.AudioStream(track, sample_rate=SR, num_channels=1):
+        self.stream = rtc.AudioStream(track, sample_rate=SR, num_channels=1)
+        async for ev in self.stream:
             if max(map(abs, array.array("h", bytes(ev.frame.data))), default=0) > LOUD:
                 self.last_voice = time.perf_counter()
                 if self.armed_at is not None and not self.reply.is_set():
@@ -94,6 +96,8 @@ async def main(turns: int) -> None:
             print(f"turn {i + 1}: {latencies[-1]:5.0f} ms  | caller: {LINES[i % len(LINES)]!r}", flush=True)
             ears.armed_at = None
             await ears.wait_quiet()
+    if ears.stream:
+        await ears.stream.aclose()  # before the event loop closes, or the SDK's FFI handles complain
     await room.disconnect()
 
     with open(TURN_LOG) as f:

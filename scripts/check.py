@@ -141,6 +141,12 @@ def main(rounds: int) -> None:
         assert recall >= 0.7, f"STT heard {heard!r} for {said!r}"
         print(f"ok   round trip: tts {ms:4.0f} ms (stall {stall:3.0f}), stt {final_ms:3.0f} ms | {said!r} -> {heard!r}")
 
+    # Streaming STT used to return nothing for one-word replies; server.py re-decodes those.
+    _, _, pcm, rate = tts("No.")
+    _, heard = asyncio.run(stt(to_16k(pcm, rate)))
+    assert words(heard) == ["no"], f"STT heard {heard!r} for 'No.'"
+    print("ok   short reply: 'No.' ->", repr(heard))
+
     print("\n" + "\n".join([
         summary("LLM first token", ttft),
         summary("TTS first audio", ttfa),

@@ -53,3 +53,13 @@ their fixes. Every step now runs from `scripts/bootstrap.sh` + `scripts/deploy.s
   `No user query found in messages` (Qwen template), now `session.say(...)`; the simulated caller was
   unheard until its track was published as `SOURCE_MICROPHONE`.
 - Measured perceived latency: 1314 ms p50 at first, 836 ms p50 after tuning (ADR 013).
+
+## 2026-10-16 – Voice, short replies, latency
+
+- Mixed voices in a browser test: no fixed reference voice (ADR 014). The uploaded-voice API took 11 s per
+  request (CPU re-encode); fixed by sending precomputed VQ codes.
+- One-word replies ("No.", "Hi.") vanished: streaming Nemotron emitted only `<pad>` tokens for them, while
+  an offline pass got them right. `server.py` now re-decodes an utterance offline when streaming is empty;
+  `check.py` asserts "No." is heard. More trailing silence did not help and cost 75 ms.
+- MTP speculative decoding: 83 → 172 tokens/s. TTS chunks 7/14: 322 ms, no stall (`check.py` measures
+  stalls now). Perceived latency 1000 → 816 ms p50 (ADR 013).

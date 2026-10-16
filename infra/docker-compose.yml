@@ -51,7 +51,9 @@ services:
     image: voice-stt:local
     container_name: stt
     depends_on: { llm: { condition: service_healthy } } # vLLM sizes its KV cache from free GPU memory
-    volumes: [/models/nemotron-3.5-asr:/models/nemotron-3.5-asr:ro]
+    volumes:
+      - /models/nemotron-3.5-asr:/models/nemotron-3.5-asr:ro
+      - ./tts/voices:/voices:ro # the Sage voice codes, for scripts/check.py
     ports: ["127.0.0.1:8001:8001"]
     healthcheck:
       <<: *health
@@ -68,11 +70,10 @@ services:
     environment:
       TORCHINDUCTOR_CACHE_DIR: /cache/inductor # compile caches survive restarts
       TRITON_CACHE_DIR: /cache/triton
-      SPEAKER_SAMPLES_DIR: /voices # uploaded voices (deploy.sh registers "sage") survive restarts
     volumes:
       - /models/fish-s2-pro:/models/fish-s2-pro:ro
       - /srv/voice/.cache/tts:/cache
-      - /srv/voice/data/tts-voices:/voices
+      - ./tts/voices:/voices:ro # reference clip, for encode_voice.py
     ports: ["127.0.0.1:8002:8002"]
     healthcheck: { <<: *health, test: [CMD, curl, -fs, localhost:8002/health] }
 
@@ -108,7 +109,9 @@ services:
     depends_on:
       livekit: { condition: service_healthy }
       tts: { condition: service_healthy }
-    volumes: [/srv/voice/logs:/logs] # turns.jsonl: per-turn latency metrics
+    volumes:
+      - /srv/voice/logs:/logs # turns.jsonl: per-turn latency metrics
+      - ./tts/voices:/voices:ro # the Sage voice codes sent with every TTS request
     healthcheck:
       <<: *health
       test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081')"]

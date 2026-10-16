@@ -84,7 +84,13 @@ def transcribe(audio_q: queue.Queue, language: str, emit) -> str:
     # move to NeMo batched cache-aware streaming if one GPU must serve hundreds.
     with torch.inference_mode():
         model.generate(**{**first, "input_features": chunks()}, streamer=streamer)
-    return streamer.text.strip()
+        if streamer.text.strip():
+            return streamer.text.strip()
+        # Streaming emits only blanks on very short utterances ("No.", "Hi."), which a full-context
+        # pass over the same audio gets right; it costs one extra decode, only for those.
+        inputs = processor(buf, sampling_rate=SR, language=language, return_tensors="pt")
+        out = model.generate(**inputs.to(model.device, dtype=model.dtype), return_dict_in_generate=True)
+        return processor.decode(out.sequences, skip_special_tokens=True)[0].strip()
 
 
 def warm_up():
